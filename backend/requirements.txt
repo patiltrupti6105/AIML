@@ -1,0 +1,8 @@
+numpy
+pandas
+matplotlib
+yfinance
+ta
+gym
+stable-baselines3
+streamlit
