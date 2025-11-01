@@ -11,15 +11,30 @@ os.makedirs(DATA_DIR, exist_ok=True)
 def get_data(ticker: str = "AAPL", start: str = "2020-01-01", end: str = "2024-12-31") -> pd.DataFrame:
     """
     Fetches historical data for `ticker` using yfinance and saves CSV in backend/data/.
-    Returns the pandas DataFrame.
+    Cleans up column names to prevent issues with extra spaces or unnamed columns.
     """
-    print(f"Downloading {ticker} from {start} to {end} ...")
-    df = yf.download(ticker, start=start, end=end)
+    print(f"📥 Downloading {ticker} from {start} to {end} ...")
+    df = yf.download(ticker, start=start, end=end, progress=False)
+
     if df.empty:
-        raise RuntimeError("No data downloaded. Check ticker and date range.")
+        raise RuntimeError("❌ No data downloaded. Check ticker and date range.")
+
+    # Clean and reset column names
+    '''
+    df.columns = [col.strip().replace(" ", "_") for col in df.columns]
+    df = df.reset_index()
+    df.rename(columns={"Date": "date", "Open": "Open", "High": "High",
+                       "Low": "Low", "Close": "Close", "Adj_Close": "Adj Close",
+                       "Volume": "Volume"}, inplace=True)
+    
+    # Ensure essential columns exist
+    required = {"Open", "High", "Low", "Close", "Volume"}
+    if not required.issubset(df.columns):
+        raise ValueError(f"Missing required columns. Found: {df.columns.tolist()}")
+'''
     out_path = os.path.join(DATA_DIR, f"data_{ticker}.csv")
-    df.to_csv(out_path)
-    print(f"Saved CSV to: {out_path} (shape: {df.shape})")
+    df.to_csv(out_path, index=False)
+    print(f"✅ Saved clean CSV to: {out_path} (shape: {df.shape})")
     return df
 
 
