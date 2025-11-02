@@ -65,7 +65,9 @@ else:
         st.info("Balance/holdings not found in results.csv (update test.py to log them).")
 
    
-EVAL_FILE = os.path.join(ROOT, "backend", "model", "evaluations.npz")
+    st.subheader("🧾 Raw Results (first 200 rows)")
+    st.dataframe(df.head(200))
+EVAL_FILE = os.path.join(ROOT, "backend", "model","evaluations.npz")
 
 if os.path.exists(EVAL_FILE):
     st.subheader("📈 Training Evaluation Performance")
