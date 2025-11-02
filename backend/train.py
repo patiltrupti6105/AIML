@@ -5,9 +5,9 @@ import pandas as pd
 from stable_baselines3 import DQN
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv
-from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnRewardThreshold
+from stable_baselines3.common.callbacks import EvalCallback
 from environment import StockTradingEnv
-
+import shutil
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "model")
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 os.makedirs(MODEL_DIR, exist_ok=True)
@@ -41,9 +41,7 @@ def train(data_file: str, total_timesteps: int = 50000, save_name: str = "dqn_tr
     eval_env = DummyVecEnv([make_env(eval_df)])
     print("Environments created: train len", len(train_df), "eval len", len(eval_df))
 
-    tb_log = os.path.join(MODEL_DIR, "tensorboard")
-    os.makedirs(tb_log, exist_ok=True)
-
+ 
     print("Initializing DQN model...")
     model = DQN(
         'MlpPolicy',
@@ -52,7 +50,7 @@ def train(data_file: str, total_timesteps: int = 50000, save_name: str = "dqn_tr
         learning_rate=1e-3,
         exploration_final_eps=0.01,
         exploration_fraction=0.3,
-        tensorboard_log=tb_log,
+        tensorboard_log=None,
         buffer_size=10000,
         train_freq=4,
         batch_size=64,
@@ -61,12 +59,12 @@ def train(data_file: str, total_timesteps: int = 50000, save_name: str = "dqn_tr
     )
 
     # Eval callback to save best model
-    save_path = os.path.join(MODEL_DIR, save_name + "_best")
+    save_path = os.path.join(MODEL_DIR)
     eval_callback = EvalCallback(
         eval_env,
         best_model_save_path=save_path,
-        log_path=save_path,
-        eval_freq=5000,
+        log_path=MODEL_DIR,
+        eval_freq=1000,
         deterministic=True,
         render=False
     )
@@ -74,11 +72,26 @@ def train(data_file: str, total_timesteps: int = 50000, save_name: str = "dqn_tr
     print(f"Training for {total_timesteps} timesteps...")
     model.learn(total_timesteps=total_timesteps, callback=eval_callback)
 
-    final_save_path = os.path.join(MODEL_DIR, f"{save_name}.zip")
-    model.save(final_save_path)
-    print(f"Model saved to {final_save_path}")
-    print(f"Best model saved to {save_path}")
-    return final_save_path
+    # Rename best_model.zip to dqn_trading_agent.zip (overwrite each time)
+    best_model_path = os.path.join(MODEL_DIR, "best_model.zip")
+    final_model_path = os.path.join(MODEL_DIR, f"{save_name}.zip")
+
+    if os.path.exists(best_model_path):
+        shutil.move(best_model_path, final_model_path)
+        print(f"✅ Best model saved as {final_model_path}")
+    else:
+        # fallback if callback didn’t save best_model
+        model.save(final_model_path)
+        print(f"✅ Model saved directly to {final_model_path}")
+
+    # evaluations.npz will already be in MODEL_DIR
+    eval_file = os.path.join(MODEL_DIR, "evaluations.npz")
+    if os.path.exists(eval_file):
+        print(f"📊 Evaluations saved to {eval_file}")
+    else:
+        print("⚠️ No evaluations file found (callback may not have run yet).")
+
+    return final_model_path
 
 
 if __name__ == "__main__":

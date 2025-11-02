@@ -64,18 +64,8 @@ else:
     else:
         st.info("Balance/holdings not found in results.csv (update test.py to log them).")
 
-    # ----- Action Distribution -----
-    st.subheader("⚙️ Action Distribution")
-    action_counts = df["action"].value_counts().sort_index()
-    st.bar_chart(pd.DataFrame({
-        "Buy": [action_counts.get(1, 0)],
-        "Hold": [action_counts.get(0, 0)],
-        "Sell": [action_counts.get(2, 0)],
-    }).T)
-
-    st.subheader("🧾 Raw Results (first 200 rows)")
-    st.dataframe(df.head(200))
-EVAL_FILE = os.path.join(ROOT, "backend", "model","dqn_trading_agent_best", "evaluations.npz")
+   
+EVAL_FILE = os.path.join(ROOT, "backend", "model", "evaluations.npz")
 
 if os.path.exists(EVAL_FILE):
     st.subheader("📈 Training Evaluation Performance")
