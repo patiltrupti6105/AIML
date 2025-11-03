@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.ndimage import gaussian_filter1d
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 RESULTS_CSV = os.path.join(ROOT, "backend", "model", "results.csv")
@@ -64,23 +65,48 @@ else:
     else:
         st.info("Balance/holdings not found in results.csv (update test.py to log them).")
 
-   
     st.subheader("🧾 Raw Results (first 200 rows)")
     st.dataframe(df.head(200))
-EVAL_FILE = os.path.join(ROOT, "backend", "model","evaluations.npz")
+
+# -------------------------
+# 📈 Model Learning Curve (Smoothed Mean + Variance)
+# -------------------------
+EVAL_FILE = os.path.join(ROOT, "backend", "model", "evaluations.npz")
 
 if os.path.exists(EVAL_FILE):
-    st.subheader("📈 Training Evaluation Performance")
+    st.subheader("📈 Model Learning Curve")
+
     data = np.load(EVAL_FILE)
     timesteps = data["timesteps"]
-    results = data["results"]
+    results = data["results"]  # shape: (n_eval, n_episodes_per_eval)
+    
+    # Compute mean and std across evaluation episodes
     mean_rewards = results.mean(axis=1)
+    std_rewards = results.std(axis=1)
 
-    fig_eval, ax_eval = plt.subplots(figsize=(10, 4))
-    ax_eval.plot(timesteps, mean_rewards, color="purple", linewidth=2)
-    ax_eval.set_title("Evaluation Mean Reward Over Time")
+    # Apply Gaussian smoothing
+    smooth_mean = gaussian_filter1d(mean_rewards, sigma=2)
+    smooth_std = gaussian_filter1d(std_rewards, sigma=2)
+
+    # Plot learning curve
+    fig_eval, ax_eval = plt.subplots(figsize=(10, 5))
+    ax_eval.plot(timesteps, smooth_mean, color="purple", linewidth=2, label=" Mean Reward")
+    ax_eval.fill_between(
+        timesteps,
+        smooth_mean - smooth_std,
+        smooth_mean + smooth_std,
+        color="purple",
+        alpha=0.2
+    )
+    ax_eval.set_title("Model Learning Curve — Evaluation Mean Reward Over Time")
     ax_eval.set_xlabel("Timesteps")
     ax_eval.set_ylabel("Mean Reward")
+    ax_eval.legend()
     st.pyplot(fig_eval)
+
+    st.caption(
+        "This curve shows how the agent’s average reward evolves during training. "
+        "A rising mean reward and narrowing variance indicate consistent learning progress."
+    )
 else:
     st.info("No evaluation file found (evaluations.npz). Train model with EvalCallback to generate it.")

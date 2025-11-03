@@ -9,8 +9,8 @@ from typing import Tuple, Dict, Any
 
 class StockTradingEnv(Env):
     """
-    Stock Trading Environment (improved):
-      - Actions: 0=Hold, 1=Buy (increase position by fraction), 2=Sell (decrease)
+    Stock Trading Environment :
+      - Actions: 0=Hold, 1=Buy , 2=Sell 
       - Supports fractional shares, transaction costs, slippage
       - Observations include indicator distances + short price window
       - Returns (obs, reward, terminated, truncated, info)
@@ -54,7 +54,7 @@ class StockTradingEnv(Env):
         # Config
         self.initial_balance = float(initial_balance)
         self.balance = float(initial_balance)
-        self.shares_held = 0.0  # fractional allowed
+        self.shares_held = 0.0  
         self.max_position_value = max_position_value or (self.initial_balance * 2)
         self.commission = float(commission)
         self.slippage = float(slippage)
@@ -132,7 +132,7 @@ class StockTradingEnv(Env):
         # define fractional trade size as fraction of max_position_value
         # e.g. buy_fraction = 0.1 => attempt to increase position by 10% of max position
         trade_fraction = 0.1
-        target_position_value = self.shares_held * price
+        
 
         if action == 1:  # BUY
             desired_increase = self.max_position_value * trade_fraction
