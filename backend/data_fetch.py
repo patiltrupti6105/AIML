@@ -12,11 +12,11 @@ def get_data(ticker: str = "AAPL", start: str = "2005-01-01", end: str = "2024-1
     """
     Fetch historical data for `ticker` using yfinance and save CSV in backend/data/.
     """
-    print(f"📥 Downloading {ticker} from {start} to {end} ...")
+    print(f" Downloading {ticker} from {start} to {end} ...")
     df = yf.download(ticker, start=start, end=end, progress=False)
 
     if df.empty:
-        raise RuntimeError("❌ No data downloaded. Check ticker and date range.")
+        raise RuntimeError(" No data downloaded. Check ticker and date range.")
 
     # Reset index to have Date column
     df = df.reset_index()
@@ -34,7 +34,7 @@ def get_data(ticker: str = "AAPL", start: str = "2005-01-01", end: str = "2024-1
 
     out_path = os.path.join(DATA_DIR, f"data_{ticker}.csv")
     df.to_csv(out_path, index=False)
-    print(f"✅ Saved clean CSV to: {out_path} (shape: {df.shape})")
+    print(f" Saved clean CSV to: {out_path} (shape: {df.shape})")
     return df
 
 

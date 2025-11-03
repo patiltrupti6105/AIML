@@ -30,16 +30,16 @@ def test(data_file: str, model_file: str, results_file: str = None):
     Load trained DQN model and run full simulation.
     Saves results and plots to backend/model/ only.
     """
-    print(f"📂 Loading data from {data_file} ...")
+    print(f" Loading data from {data_file} ...")
     df = pd.read_csv(data_file)
     env = StockTradingEnv(df)
 
     # --- Model Path Handling (no new folders) ---
     model_path = os.path.join(MODEL_DIR, model_file)
     if not os.path.exists(model_path):
-        raise FileNotFoundError(f"❌ Model file not found: {model_path}")
+        raise FileNotFoundError(f" Model file not found: {model_path}")
 
-    print(f"🤖 Loading model from {model_path} ...")
+    print(f" Loading model from {model_path} ...")
     model = DQN.load(model_path, env=env)
 
     obs, _ = env.reset()
@@ -71,7 +71,7 @@ def test(data_file: str, model_file: str, results_file: str = None):
         equity.append(portfolio_value)
         step += 1
         if step > len(env.df) + 5:
-            print("⚠️ Early stop (safety limit reached)")
+            print(" Early stop (safety limit reached)")
             break
 
     # --- Save Results ---
@@ -79,11 +79,11 @@ def test(data_file: str, model_file: str, results_file: str = None):
     if results_file is None:
         results_file = os.path.join(MODEL_DIR, "results.csv")
     results_df.to_csv(results_file, index=False)
-    print(f"✅ Results saved to {results_file} ({len(results_df)} steps)")
+    print(f" Results saved to {results_file} ({len(results_df)} steps)")
 
     # --- Compute Metrics ---
     metrics = compute_metrics(np.array(equity))
-    print(f"📊 Metrics: {metrics}")
+    print(f" Metrics: {metrics}")
 
     # --- Save Plots (in model folder only) ---
     plt.figure(figsize=(10, 4))
@@ -104,7 +104,7 @@ def test(data_file: str, model_file: str, results_file: str = None):
     plt.savefig(os.path.join(MODEL_DIR, "equity_curve.png"))
     plt.close()
 
-    print("📈 Plots saved to backend/model/")
+    print(" Plots saved to backend/model/")
     return results_df, metrics
 
 

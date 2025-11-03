@@ -78,18 +78,18 @@ def train(data_file: str, total_timesteps: int = 50000, save_name: str = "dqn_tr
 
     if os.path.exists(best_model_path):
         shutil.move(best_model_path, final_model_path)
-        print(f"✅ Best model saved as {final_model_path}")
+        print(f" Best model saved as {final_model_path}")
     else:
         # fallback if callback didn’t save best_model
         model.save(final_model_path)
-        print(f"✅ Model saved directly to {final_model_path}")
+        print(f" Model saved directly to {final_model_path}")
 
     # evaluations.npz will already be in MODEL_DIR
     eval_file = os.path.join(MODEL_DIR, "evaluations.npz")
     if os.path.exists(eval_file):
-        print(f"📊 Evaluations saved to {eval_file}")
+        print(f" Evaluations saved to {eval_file}")
     else:
-        print("⚠️ No evaluations file found (callback may not have run yet).")
+        print(" No evaluations file found (callback may not have run yet).")
 
     return final_model_path
 
