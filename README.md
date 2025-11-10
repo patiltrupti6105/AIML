@@ -1,6 +1,23 @@
-# Self-Learning Stock Trading Bot (Simulation)
+# Real-Time RL Trading Bot
 
-## Summary
-A simulation project where a reinforcement-learning agent (DQN) learns to trade a single stock in a historical-data environment (no real trading). Backend contains data fetching, environment, training & testing. Frontend (Streamlit) visualizes results.
+Advanced reinforcement learning trading bot with real-time capabilities.
 
-## Project Structure
+## 🚀 Quick Start
+
+### 1. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Run Everything
+```bash
+# Complete pipeline (fetch data + train + trade)
+python run.py --mode all
+
+# Or run steps individually:
+python run.py --mode setup              # Fetch data
+python run.py --mode train              # Train model
+python run.py --mode trade --duration 60  # Trade for 60 minutes
+```
+
+## 📁 Project Structure
