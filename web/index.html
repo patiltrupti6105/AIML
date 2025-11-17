@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trading Bot Simulator</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="https://cdn.plot.ly/plotly-2.24.2.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1> Trading Bot Simulator</h1>
+        <div class="controls">
+            <select id="symbolSelect"><option value="">Loading symbols...</option></select>
+            <label>Speed</label>
+            <input id="speedSlider" type="range" min="2" max="10" step="0.5" value="2">
+            <span id="speedLabel">2.0s</span>
+            <label><input id="useModelCheck" type="checkbox" checked> Use Model</label>
+            <button id="connectBtn" class="btn primary">🔌 Connect</button>
+            <button id="playBtn" class="btn" disabled>▶ Play</button>
+            <button id="pauseBtn" class="btn" disabled>⏸ Pause</button>
+            <button id="stepBtn" class="btn" disabled>⏭ Step</button>
+        </div>
+    </header>
+    <main>
+        <section class="left">
+            <div class="card"><h2>Price Chart</h2><div id="candles" class="chart"></div></div>
+        </section>
+        <section class="right">
+            <div class="card">
+                <h2>Portfolio</h2>
+                <div class="metric-grid">
+                    <div class="metric"><span>Net Worth</span><strong id="netWorth" class="value">$--</strong></div>
+                    <div class="metric"><span>Cash</span><strong id="cash" class="value">$--</strong></div>
+                    <div class="metric"><span>Unrealized P/L</span><strong id="upl" class="value">$--</strong></div>
+                </div>
+                <div id="portfolioChart" class="chart small"></div>
+            </div>
+            <div class="card"><h2>Recent Actions</h2><div id="actionsLog" class="actions-log"></div></div>
+            <div class="card">
+                <h2>Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat"><span>Total Return</span><strong id="totalReturn">--%</strong></div>
+                    <div class="stat"><span>Current Step</span><strong id="currentStep">--</strong></div>
+                    <div class="stat"><span>Cumulative Reward</span><strong id="cumReward">--</strong></div>
+                </div>
+            </div>
+            <div class="card"><h2>System Log</h2><div id="logBox" class="log"></div></div>
+        </section>
+    </main>
+    <section class="indicators-section">
+        <div class="card">
+            <h2> Technical Indicators</h2>
+            <div id="indicatorsChart" class="chart"></div>
+        </div>
+    </section>
+    <section class="learning-curve-section">
+        <div class="card">
+            <h2> Model Learning Curve</h2>
+            <div id="learningCurve" class="chart"></div>
+            <p class="chart-caption">This curve shows how the agent's average reward evolves during training. A rising mean reward and narrowing variance indicate consistent learning progress.</p>
+        </div>
+    </section>
+    <div id="statusBar" class="status-bar">
+        <span id="statusText">Disconnected</span>
+        <span id="progressText"></span>
+    </div>
+    <script src="/static/script.js"></script>
+</body>
+</html>
