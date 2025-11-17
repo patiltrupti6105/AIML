@@ -400,6 +400,7 @@ class TradingSimulator:
                     'volume': int(row['Volume']),
                     'action': executed_action,  # Action type (0=hold, 1=buy, 2=sell)
                     'shares_sold': shares_sold,  # Number of shares sold (0 if no sell)
+                    'shares_bought': int(info.get('shares_bought', 0)),  # Shares bought on this step
                     'shares_held': int(shares_held),  # Current number of shares held
                     'reward': float(reward),
                     'cumulative_reward': float(cumulative_reward),

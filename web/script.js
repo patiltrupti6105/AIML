@@ -47,13 +47,14 @@ function log(msg, type = 'info') {
     while (logBox.children.length > 50) logBox.removeChild(logBox.lastChild);
 }
 
-function logAction(action, price, timestamp, sharesSold = 0) {
+function logAction(action, price, timestamp, sharesSold = 0, sharesBought = 0) {
     const div = document.createElement("div");
     div.className = `action-item ${action}`;
     let icon = '⸱', text = 'HOLD';
     if (action === 'buy') { 
         icon = '🟢'; 
-        text = 'BUY 1 share'; 
+        const sharesText = sharesBought > 1 ? `${sharesBought} shares` : '1 share';
+        text = `BUY ${sharesText}`; 
     }
     else if (action === 'sell') { 
         icon = '🔴'; 
@@ -755,13 +756,17 @@ function connectWS() {
                     const actionMap = {0: 'hold', 1: 'buy', 2: 'sell'};
                     const action = actionMap[msg.action] || 'hold';
                     const sharesSold = msg.shares_sold || 0;
+                const sharesBought = msg.shares_bought || 0;
                     
                     if (action !== 'hold') {
-                        logAction(action, msg.close, msg.timestamp, sharesSold);
+                    logAction(action, msg.close, msg.timestamp, sharesSold, sharesBought);
                         if (action === 'sell' && sharesSold > 1) {
                             log(`${action.toUpperCase()} ${sharesSold} shares @ $${msg.close.toFixed(2)}`);
                         } else {
-                            log(`${action.toUpperCase()} @ $${msg.close.toFixed(2)}`);
+                        const sharesDetail = action === 'buy' && sharesBought > 1
+                            ? ` ${sharesBought} shares`
+                            : '';
+                        log(`${action.toUpperCase()}${sharesDetail} @ $${msg.close.toFixed(2)}`);
                         }
                     }
                 }
@@ -964,7 +969,7 @@ function loadLearningCurve() {
                 margin: {t:40, b:50, l:60, r:20},
                 paper_bgcolor: 'rgba(0,0,0,0)',
                 plot_bgcolor: '#ffffff',
-                font: {color: '#424242', size: 12},
+                font: {color: '#00d4ff', size: 12},
                 xaxis: {
                     title: 'Timesteps',
                     gridcolor: '#e0e0e0',
@@ -982,7 +987,7 @@ function loadLearningCurve() {
                 dragmode: 'pan',
                 title: {
                     text: 'Model Learning Curve — Evaluation Mean Reward Over Time',
-                    font: {size: 16, color: '#424242'}
+                    font: {size: 16, color: '#00d4ff'}
                 }
             });
             
