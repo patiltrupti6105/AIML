@@ -108,8 +108,8 @@ class EnvCfg:
     stop_loss_pct: float = config.STOP_LOSS_PCT
     take_profit_pct: float = config.TAKE_PROFIT_PCT
     bid_ask_spread_pct: float = 0.001  # 0.1% spread (10 bps)
-    trailing_stop_pct: float = 0.05  # NEW: 5% trailing stop from peak
-    use_trailing_stop: bool = True   # NEW: Enable/disable trailing stop
+    trailing_stop_pct: float = 0.05  #  5% trailing stop from peak
+    use_trailing_stop: bool = True   #  Enable/disable trailing stop
 
 
 # -----------------------------------------------------------------------------
