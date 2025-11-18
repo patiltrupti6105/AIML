@@ -1,4 +1,4 @@
-# trading_environment.py - REALISTIC VERSION
+# trading_environment.py 
 import logging
 import math
 from dataclasses import dataclass
@@ -19,20 +19,44 @@ logger = logging.getLogger("env")
 
 
 # -----------------------------------------------------------------------------
-# Trade tracking
+# Trade tracking 
 # -----------------------------------------------------------------------------
 @dataclass
 class Trade:
-    """Represents a single trade/position lot"""
+    """Represents a single trade/position lot with trailing stop support"""
     entry_price: float
     shares: int
     entry_step: int
+    highest_price: float = None  # NEW: Track peak price for trailing stop
+    trailing_stop_price: float = None  # NEW: Current trailing stop level
     
     def unrealized_pnl(self, current_price: float) -> float:
         return (current_price - self.entry_price) * self.shares
     
     def unrealized_pnl_pct(self, current_price: float) -> float:
         return (current_price - self.entry_price) / self.entry_price
+    
+    def update_trailing_stop(self, bar_high: float, trailing_pct: float, initial_stop_pct: float):
+        """Update trailing stop based on new high price"""
+        # Initialize highest price on first call
+        if self.highest_price is None:
+            self.highest_price = self.entry_price
+        
+        # Update highest price if new high reached
+        if bar_high > self.highest_price:
+            self.highest_price = bar_high
+        
+        # Calculate trailing stop (% below highest price)
+        trailing_stop = self.highest_price * (1 - trailing_pct)
+        
+        # Calculate initial stop (% below entry)
+        initial_stop = self.entry_price * (1 - initial_stop_pct)
+        
+        # Use the HIGHER of: initial stop OR trailing stop
+        # (this ensures stop only moves UP, never down)
+        self.trailing_stop_price = max(initial_stop, trailing_stop)
+        
+        return self.trailing_stop_price
 
 
 # -----------------------------------------------------------------------------
@@ -72,7 +96,7 @@ def _atr(df: pd.DataFrame, n: int = 14) -> pd.Series:
 
 
 # -----------------------------------------------------------------------------
-# Config dataclass
+# Config dataclass - MODIFIED
 # -----------------------------------------------------------------------------
 @dataclass
 class EnvCfg:
@@ -84,18 +108,21 @@ class EnvCfg:
     stop_loss_pct: float = config.STOP_LOSS_PCT
     take_profit_pct: float = config.TAKE_PROFIT_PCT
     bid_ask_spread_pct: float = 0.001  # 0.1% spread (10 bps)
+    trailing_stop_pct: float = 0.05  # NEW: 5% trailing stop from peak
+    use_trailing_stop: bool = True   # NEW: Enable/disable trailing stop
 
 
 # -----------------------------------------------------------------------------
-# Trading Environment - REALISTIC
+# Trading Environment - WITH TRAILING STOP
 # -----------------------------------------------------------------------------
 class TradingEnvironment(gym.Env):
     """
-    REALISTIC TRADING SIMULATION:
+    REALISTIC TRADING SIMULATION WITH TRAILING STOP:
     - Uses NEXT bar's Open price for fills (not current Close)
     - Tracks individual position lots with separate entry prices
     - Models bid-ask spread
     - Stop loss checks happen at Low, take profit at High
+    - TRAILING STOP: Locks in profits as price rises
     - Proper realized vs unrealized P&L
     
     Actions:
@@ -151,7 +178,7 @@ class TradingEnvironment(gym.Env):
 
         # Spaces
         self.action_space = Discrete(4)
-        obs_len = self.cfg.lookback_window + 14  # Added 1 more feature
+        obs_len = self.cfg.lookback_window + 14
         self.observation_space = Box(low=-10.0, high=10.0, shape=(obs_len,), dtype=np.float32)
 
         # Episode state
@@ -175,10 +202,6 @@ class TradingEnvironment(gym.Env):
             "realized_pnl": 0.0,
         }
 
-        # REALISTIC: We're at end of bar `current_step`
-        # We can see the Close price, indicators, etc.
-        # But we can't trade until NEXT bar opens
-        
         current_bar = self.df.iloc[self.current_step]
         current_close = float(current_bar["Close"])
         
@@ -186,7 +209,6 @@ class TradingEnvironment(gym.Env):
         if self.current_step >= len(self.df) - 2:
             done = True
             obs = self._get_obs()
-            # Just mark positions to market
             self._mark_to_market(current_close)
             info.update(self._build_info(current_close))
             return obs, 0.0, done, False, info
@@ -195,7 +217,6 @@ class TradingEnvironment(gym.Env):
         self.current_step += 1
         next_bar = self.df.iloc[self.current_step]
         
-        # REALISTIC: Execute at next bar's OPEN price
         execution_price = float(next_bar["Open"])
         bar_high = float(next_bar["High"])
         bar_low = float(next_bar["Low"])
@@ -211,7 +232,7 @@ class TradingEnvironment(gym.Env):
         elif action == 3:
             self._close_all_positions(execution_price, info)
 
-        # REALISTIC: Check stop loss at bar's LOW, take profit at bar's HIGH
+        # MODIFIED: Check risk management with trailing stop
         self._check_risk_management(bar_low, bar_high, info)
 
         # Mark all positions to market at bar close
@@ -219,9 +240,9 @@ class TradingEnvironment(gym.Env):
 
         # Calculate reward based on step P&L
         step_pnl = self.net_worth - start_nav
-        reward = (step_pnl / (start_nav + 1e-9)) * 100  # Percentage points
+        reward = (step_pnl / (start_nav + 1e-9)) * 100
         
-        # Small penalty for trading (encourages selective trades)
+        # Small penalty for trading
         if action != 0:
             reward -= 0.02
 
@@ -241,7 +262,7 @@ class TradingEnvironment(gym.Env):
     def reset_state(self):
         self.current_step = max(self.cfg.lookback_window - 1, 0)
         self.balance = float(self.cfg.initial_capital)
-        self.positions: List[Trade] = []  # Track individual lots
+        self.positions: List[Trade] = []
         self.net_worth = self.balance
         self.total_realized_pnl = 0.0
         self.total_commission_paid = 0.0
@@ -269,18 +290,15 @@ class TradingEnvironment(gym.Env):
         return total_cost / total_shares if total_shares > 0 else 0.0
 
     # -------------------------------------------------------------------------
-    # Trading Logic - REALISTIC
+    # Trading Logic
     # -------------------------------------------------------------------------
     def _get_fill_price(self, market_price: float, is_buy: bool) -> float:
-        """
-        REALISTIC: Model bid-ask spread
-        Buys hit the ask (higher), sells hit the bid (lower)
-        """
+        """Model bid-ask spread"""
         spread = market_price * self.cfg.bid_ask_spread_pct
         if is_buy:
-            return market_price + spread / 2  # Buy at ask
+            return market_price + spread / 2
         else:
-            return market_price - spread / 2  # Sell at bid
+            return market_price - spread / 2
 
     def _calculate_commission(self, shares: int, price: float) -> float:
         """Calculate commission on trade"""
@@ -288,29 +306,18 @@ class TradingEnvironment(gym.Env):
         return trade_value * self.cfg.commission
 
     def _buy_risk_based(self, market_price: float, info: Dict):
-        """
-        REALISTIC POSITION SIZING:
-        Risk 2% of account on this trade
-        Stop loss determines position size
-        """
+        """Risk-based position sizing"""
         if self.cfg.stop_loss_pct <= 0:
-            # Fallback: buy what we can afford
             risk_amount = self.balance * 0.25
         else:
-            # Risk-based sizing: risk 2% of account
             risk_amount = self.net_worth * 0.02
             
-        # Calculate position size based on stop loss distance
         stop_distance_pct = abs(self.cfg.stop_loss_pct)
         max_position_value = risk_amount / stop_distance_pct
         
-        # Get fill price (at the ask)
         fill_price = self._get_fill_price(market_price, is_buy=True)
-        
-        # Apply slippage
         fill_price = fill_price * (1 + self.cfg.slippage)
         
-        # Calculate shares to buy
         shares_to_buy = int(max_position_value / fill_price)
         
         if shares_to_buy <= 0:
@@ -318,12 +325,10 @@ class TradingEnvironment(gym.Env):
             info["buy_reason"] = "insufficient_capital"
             return
         
-        # Check balance and position limits
         total_cost = shares_to_buy * fill_price
         commission = self._calculate_commission(shares_to_buy, fill_price)
         total_cost_with_commission = total_cost + commission
         
-        # Check max position limit
         new_total_value = self._total_position_value(market_price) + total_cost
         max_allowed = self.cfg.max_position_pct * self.cfg.initial_capital
         
@@ -341,7 +346,7 @@ class TradingEnvironment(gym.Env):
         self.balance -= total_cost_with_commission
         self.total_commission_paid += commission
         
-        # Create new position lot
+        # Create new position lot (trailing stop initialized in update)
         new_trade = Trade(
             entry_price=fill_price,
             shares=shares_to_buy,
@@ -356,10 +361,7 @@ class TradingEnvironment(gym.Env):
         info["total_cost"] = total_cost_with_commission
 
     def _sell_pct_fifo(self, market_price: float, pct: float, info: Dict):
-        """
-        REALISTIC: Sell percentage of position using FIFO
-        (First In, First Out - for tax purposes)
-        """
+        """Sell percentage of position using FIFO"""
         if not self.positions:
             info["sell_executed"] = False
             return
@@ -389,16 +391,12 @@ class TradingEnvironment(gym.Env):
         self._execute_sell(total_shares, fill_price, info)
 
     def _execute_sell(self, shares_to_sell: int, fill_price: float, info: Dict):
-        """
-        Execute sale using FIFO accounting
-        Track realized P&L properly
-        """
+        """Execute sale using FIFO accounting"""
         remaining = shares_to_sell
         total_proceeds = 0.0
         total_cost_basis = 0.0
         trades_closed = []
         
-        # FIFO: sell oldest positions first
         while remaining > 0 and self.positions:
             position = self.positions[0]
             
@@ -441,11 +439,9 @@ class TradingEnvironment(gym.Env):
                 position.shares -= remaining
                 remaining = 0
         
-        # Update balance
         self.balance += total_proceeds
-        self.total_commission_paid += sum(t.get("commission", 0) for t in trades_closed)
+        self.total_commission_paid += sum(self._calculate_commission(t["shares"], t["exit_price"]) for t in trades_closed)
         
-        # Track realized P&L
         realized_pnl = total_proceeds - total_cost_basis
         self.total_realized_pnl += realized_pnl
         
@@ -455,11 +451,15 @@ class TradingEnvironment(gym.Env):
         info["realized_pnl"] = realized_pnl
         info["trades_closed"] = trades_closed
 
+    # -------------------------------------------------------------------------
+    # Risk Management 
+    # -------------------------------------------------------------------------
     def _check_risk_management(self, bar_low: float, bar_high: float, info: Dict):
         """
-        REALISTIC: Check stops at bar extremes
-        - Stop loss triggers at LOW of bar
-        - Take profit triggers at HIGH of bar
+        Check stops at bar extremes with TRAILING STOP support
+        - Updates trailing stop based on bar_high
+        - Checks if bar_low triggered the stop
+        - Also checks fixed take profit at bar_high
         """
         if not self.positions:
             return
@@ -467,24 +467,38 @@ class TradingEnvironment(gym.Env):
         positions_to_close = []
         
         for position in self.positions:
-            pnl_at_low = position.unrealized_pnl_pct(bar_low)
-            pnl_at_high = position.unrealized_pnl_pct(bar_high)
+            # UPDATE TRAILING STOP (moves up as price rises)
+            if self.cfg.use_trailing_stop:
+                trailing_stop_price = position.update_trailing_stop(
+                    bar_high=bar_high,
+                    trailing_pct=self.cfg.trailing_stop_pct,
+                    initial_stop_pct=self.cfg.stop_loss_pct
+                )
+                
+                # Check if trailing stop was hit at bar's LOW
+                if bar_low <= trailing_stop_price:
+                    positions_to_close.append(("trailing_stop", position, trailing_stop_price))
+                    continue  # Skip other checks for this position
+            else:
+                # Original fixed stop loss logic
+                pnl_at_low = position.unrealized_pnl_pct(bar_low)
+                stop_loss = -abs(self.cfg.stop_loss_pct)
+                
+                if pnl_at_low <= stop_loss:
+                    positions_to_close.append(("stop_loss", position, bar_low))
+                    continue
             
-            stop_loss = -abs(self.cfg.stop_loss_pct)
+            # Check take profit at HIGH (unchanged)
+            pnl_at_high = position.unrealized_pnl_pct(bar_high)
             take_profit = abs(self.cfg.take_profit_pct)
             
-            # Stop loss hit
-            if pnl_at_low <= stop_loss:
-                positions_to_close.append(("stop_loss", position, bar_low))
-            # Take profit hit
-            elif pnl_at_high >= take_profit:
+            if pnl_at_high >= take_profit:
                 positions_to_close.append(("take_profit", position, bar_high))
         
         # Execute risk exits
         for exit_type, position, exit_price in positions_to_close:
             fill_price = self._get_fill_price(exit_price, is_buy=False)
             
-            # Close this specific position
             proceeds = position.shares * fill_price
             cost_basis = position.shares * position.entry_price
             commission = self._calculate_commission(position.shares, fill_price)
@@ -495,22 +509,29 @@ class TradingEnvironment(gym.Env):
             realized_pnl = proceeds - commission - cost_basis
             self.total_realized_pnl += realized_pnl
             
-            info.setdefault("risk_exits", []).append({
+            # NEW: Include trailing stop info
+            exit_info = {
                 "type": exit_type,
                 "shares": position.shares,
                 "entry_price": position.entry_price,
                 "exit_price": fill_price,
                 "pnl": realized_pnl
-            })
+            }
             
-            # Remove position
+            # Add trailing stop details if applicable
+            if exit_type == "trailing_stop":
+                exit_info["highest_price"] = position.highest_price
+                exit_info["trailing_stop_price"] = position.trailing_stop_price
+                exit_info["profit_from_entry_pct"] = ((fill_price - position.entry_price) / position.entry_price) * 100
+            
+            info.setdefault("risk_exits", []).append(exit_info)
+            
             self.positions.remove(position)
 
     # -------------------------------------------------------------------------
     # Observation
     # -------------------------------------------------------------------------
     def _get_obs(self) -> np.ndarray:
-        # Lookback returns (based on Close prices we can see)
         start = max(0, self.current_step - self.cfg.lookback_window + 1)
         window = self.df.iloc[start : self.current_step + 1]
         rets = window["ret"].to_numpy(dtype=np.float32)
@@ -518,11 +539,9 @@ class TradingEnvironment(gym.Env):
             pad = np.zeros(self.cfg.lookback_window - len(rets), dtype=np.float32)
             rets = np.concatenate([pad, rets], axis=0)
 
-        # Current row (what we can see at end of bar)
         row = self.df.iloc[self.current_step]
         price = float(row["Close"])
 
-        # Normalize features
         ma_start = max(0, self.current_step - 49)
         ma50 = float(self.df["Close"].iloc[ma_start : self.current_step + 1].mean())
         if not np.isfinite(ma50) or ma50 <= 0:
@@ -531,18 +550,15 @@ class TradingEnvironment(gym.Env):
         price_norm = np.clip((price / ma50 - 1.0) * 10, -3, 3)
         balance_norm = np.clip(self.balance / self.cfg.initial_capital - 1.0, -1, 2)
         
-        # Position info
         total_shares = self._total_shares()
         shares_norm = np.clip(total_shares / 100.0, 0, 5)
         position_value = self._total_position_value(price)
         position_pct = position_value / (self.cfg.initial_capital + 1e-9)
         position_value_norm = np.clip(position_pct, 0, 2)
         
-        # Unrealized P&L percentage
         unrealized_pnl = self._unrealized_pnl(price)
         unrealized_pnl_norm = np.clip(unrealized_pnl / (self.cfg.initial_capital + 1e-9) * 10, -3, 3)
 
-        # Indicators
         rsi = float(row.get("rsi", 50.0)) / 100.0
         sma10_z = float(row.get("sma10_z", 0.0))
         sma20_z = float(row.get("sma20_z", 0.0))
@@ -559,7 +575,7 @@ class TradingEnvironment(gym.Env):
                 shares_norm,
                 price_norm,
                 position_value_norm,
-                unrealized_pnl_norm,  # NEW: agent can see current P&L
+                unrealized_pnl_norm,
                 rsi,
                 sma10_z,
                 sma20_z,
@@ -592,23 +608,14 @@ class TradingEnvironment(gym.Env):
             "total_commission_paid": self.total_commission_paid,
             "symbol": self.symbol,
         }
+    
     @property
     def shares_held(self) -> int:
-        """
-        Backward-compatible property for old code.
-        Returns total shares currently held across all position lots.
-        """
+        """Backward-compatible property"""
         return self._total_shares()
+    
     def _cost_multiplier(self) -> float:
-        """
-        Backward-compatible cost multiplier for web_simulator.
-        Matches old version EXACTLY:
-
-            commission + slippage
-
-        Do NOT include spread here — spread is already handled in _get_fill_price().
-        The simulator ONLY uses this for pre-validation (affordability check).
-        """
+        """Backward-compatible cost multiplier"""
         return self.cfg.commission + self.cfg.slippage
 
     # -------------------------------------------------------------------------
@@ -620,9 +627,16 @@ class TradingEnvironment(gym.Env):
         price = float(self.df.iloc[self.current_step]["Close"])
         return_pct = ((self.net_worth / self.cfg.initial_capital) - 1.0) * 100
         unrealized = self._unrealized_pnl(price)
+        
+        # NEW: Show trailing stop info
+        trailing_info = ""
+        if self.positions and self.cfg.use_trailing_stop:
+            avg_stop = sum(p.trailing_stop_price or 0 for p in self.positions) / len(self.positions)
+            trailing_info = f" avg_trail_stop={avg_stop:.2f}"
+        
         print(
             f"[{self.symbol}] step={self.current_step} price={price:.2f} "
             f"bal={self.balance:.2f} positions={len(self.positions)} "
             f"shares={self._total_shares()} unrealized_pnl={unrealized:.2f} "
-            f"nav={self.net_worth:.2f} return={return_pct:.2f}%"
+            f"nav={self.net_worth:.2f} return={return_pct:.2f}%{trailing_info}"
         )
