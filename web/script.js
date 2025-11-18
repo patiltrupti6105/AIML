@@ -33,6 +33,10 @@ let sellMarkers = {x: [], y: []}; // Sell markers
 let portfolioX = [], portfolioY = [];
 let indicatorTimestamps = []; // Track timestamps for indicators
 let rsiData = [], macdData = [], macdSignalData = []; // Indicator data
+let sidewaysMarketTimestamps = []; // Timestamps for sideways market chart
+let sidewaysMarketPrices = []; // Prices for sideways market chart
+let supportLevel = null; // Support level
+let resistanceLevel = null; // Resistance level
 let totalBars = 0, currentBar = 0;
 let chartsInitialized = false;
 const INITIAL_CAPITAL = 100000; // Must match backend config.INITIAL_CAPITAL
@@ -92,6 +96,128 @@ function calcRSI() {
     }
     const rs = gains / (losses || 1);
         return 100 - 100/(1+rs);
+}
+
+// Calculate support and resistance levels for sideways market
+function calculateSupportResistance() {
+    if (closes.length < 20) {
+        return { support: null, resistance: null };
+    }
+    
+    // Use last 50 periods to calculate support/resistance
+    const lookback = Math.min(50, closes.length);
+    const recentPrices = closes.slice(-lookback);
+    const recentLows = candles.slice(-lookback).map(c => c.low);
+    const recentHighs = candles.slice(-lookback).map(c => c.high);
+    
+    // Calculate support as the minimum low in the lookback period
+    const support = Math.min(...recentLows);
+    
+    // Calculate resistance as the maximum high in the lookback period
+    const resistance = Math.max(...recentHighs);
+    
+    // Only consider it a sideways market if the range is reasonable (not too wide)
+    const priceRange = resistance - support;
+    const avgPrice = recentPrices.reduce((a, b) => a + b, 0) / recentPrices.length;
+    const rangePercent = (priceRange / avgPrice) * 100;
+    
+    // If range is less than 15% of average price, consider it sideways
+    if (rangePercent < 15) {
+        return { support, resistance };
+    }
+    
+    return { support: null, resistance: null };
+}
+
+// Update sideways market chart
+function updateSidewaysMarketChart() {
+    if (!chartsInitialized) return;
+    
+    try {
+        const sidewaysEl = document.getElementById("sidewaysMarketChart");
+        if (!sidewaysEl) return;
+        
+        // Calculate support and resistance
+        const levels = calculateSupportResistance();
+        supportLevel = levels.support;
+        resistanceLevel = levels.resistance;
+        
+        // Update data arrays
+        if (candleTimestamps.length > 0 && closes.length > 0) {
+            // Use last 100 points for performance
+            const maxPoints = 100;
+            const startIdx = Math.max(0, candleTimestamps.length - maxPoints);
+            
+            // Create copies and ensure they're properly aligned
+            const timestamps = candleTimestamps.slice(startIdx);
+            const prices = closes.slice(startIdx);
+            
+            // Ensure timestamps and prices arrays are the same length
+            const minLength = Math.min(timestamps.length, prices.length);
+            const finalTimestamps = timestamps.slice(0, minLength);
+            const finalPrices = prices.slice(0, minLength);
+            
+            // Build the traces array
+            const traces = [
+                {
+                    x: finalTimestamps,
+                    y: finalPrices,
+                    mode: "lines",
+                    name: "Price",
+                    type: "scatter",
+                    line: {color: '#00d4ff', width: 2}
+                }
+            ];
+            
+            // Only add support/resistance lines if we have valid levels
+            if (supportLevel !== null && finalTimestamps.length > 0) {
+                traces.push({
+                    x: [finalTimestamps[0], finalTimestamps[finalTimestamps.length - 1]],
+                    y: [supportLevel, supportLevel],
+                    mode: "lines",
+                    name: "Support",
+                    type: "scatter",
+                    line: {color: '#26a69a', width: 2, dash: 'dash'}
+                });
+            }
+            
+            if (resistanceLevel !== null && finalTimestamps.length > 0) {
+                traces.push({
+                    x: [finalTimestamps[0], finalTimestamps[finalTimestamps.length - 1]],
+                    y: [resistanceLevel, resistanceLevel],
+                    mode: "lines",
+                    name: "Resistance",
+                    type: "scatter",
+                    line: {color: '#ef5350', width: 2, dash: 'dash'}
+                });
+            }
+            
+            // Update chart using Plotly.react - this will completely replace the data
+            Plotly.react("sidewaysMarketChart", traces, {
+                margin: {t:30, b:50, l:60, r:20},
+                paper_bgcolor: '#000000',
+                plot_bgcolor: '#000000',
+                font: {color: '#00d4ff', size: 11},
+                xaxis: {
+                    gridcolor: 'rgba(255,255,255,0.05)',
+                    type: 'date',
+                    showgrid: true,
+                    gridwidth: 1,
+                    title: 'Time'
+                },
+                yaxis: {
+                    gridcolor: 'rgba(255,255,255,0.05)',
+                    title: 'Price ($)',
+                    showgrid: true,
+                    gridwidth: 1
+                },
+                legend: {x: 0, y: 1, orientation: 'h', bgcolor: 'rgba(255,255,255,0.8)'},
+                dragmode: 'pan'
+            });
+        }
+    } catch (error) {
+        console.error("Error updating sideways market chart:", error);
+    }
 }
 
 // Update indicators chart
@@ -208,8 +334,8 @@ function initCharts() {
               marker: {symbol: "triangle-down", size: 14, color: '#f6100cff', line: {color: '#ffffff', width: 1.5}} }
         ], {
             margin: {t:30, b:10, l:60, r:20}, 
-            paper_bgcolor: 'rgba(0,0,0,0)',
-            plot_bgcolor: 'rgba(0,0,0,0)', 
+            paper_bgcolor: '#000000',
+            plot_bgcolor: '#000000', 
             font: {color: '#00d4ff', size: 12},
             xaxis: {
                 gridcolor: 'rgba(255,255,255,0.05)', 
@@ -240,8 +366,8 @@ function initCharts() {
             }
         ], {
             margin: {t:20, b:30, l:60, r:20}, 
-            paper_bgcolor: 'rgba(0,0,0,0)',
-            plot_bgcolor: 'rgba(255,255,255,0.02)', 
+            paper_bgcolor: '#000000',
+            plot_bgcolor: '#000000', 
             font: {color: '#00d4ff', size: 11},
             xaxis: {gridcolor: 'rgba(255,255,255,0.05)', type: 'date', title: 'Time'}, 
             yaxis: {gridcolor: 'rgba(255,255,255,0.05)', title: 'Portfolio Value ($)', 
@@ -280,8 +406,8 @@ function initCharts() {
             }
         ], {
             margin: {t:30, b:50, l:60, r:60},
-            paper_bgcolor: 'rgba(0,0,0,0)',
-            plot_bgcolor: '#ffffff',
+            paper_bgcolor: '#000000',
+            plot_bgcolor: '#000000',
             font: {color: '#00d4ff', size: 11},
             xaxis: {
                 gridcolor: 'rgba(255,255,255,0.05)',
@@ -313,6 +439,58 @@ function initCharts() {
             dragmode: 'pan'
         });
         log("Indicators chart created");
+        
+        // Sideways market chart
+        const sidewaysEl = document.getElementById("sidewaysMarketChart");
+        if (sidewaysEl) {
+            Plotly.newPlot("sidewaysMarketChart", [
+                {
+                    x: [],
+                    y: [],
+                    mode: "lines",
+                    name: "Price",
+                    type: "scatter",
+                    line: {color: '#00d4ff', width: 2}
+                },
+                {
+                    x: [],
+                    y: [],
+                    mode: "lines",
+                    name: "Support",
+                    type: "scatter",
+                    line: {color: '#26a69a', width: 2, dash: 'dash'}
+                },
+                {
+                    x: [],
+                    y: [],
+                    mode: "lines",
+                    name: "Resistance",
+                    type: "scatter",
+                    line: {color: '#ef5350', width: 2, dash: 'dash'}
+                }
+            ], {
+                margin: {t:30, b:50, l:60, r:20},
+                paper_bgcolor: '#000000',
+                plot_bgcolor: '#000000',
+                font: {color: '#00d4ff', size: 11},
+                xaxis: {
+                    gridcolor: 'rgba(255,255,255,0.05)',
+                    type: 'date',
+                    showgrid: true,
+                    gridwidth: 1,
+                    title: 'Time'
+                },
+                yaxis: {
+                    gridcolor: 'rgba(255,255,255,0.05)',
+                    title: 'Price ($)',
+                    showgrid: true,
+                    gridwidth: 1
+                },
+                legend: {x: 0, y: 1, orientation: 'h', bgcolor: 'rgba(255,255,255,0.8)'},
+                dragmode: 'pan'
+            });
+            log("Sideways market chart created");
+        }
         
         chartsInitialized = true;
         log("All charts initialized successfully", "success");
@@ -416,6 +594,11 @@ function addCandle(c, isBatch = false) {
         if (totalBars > 0) {
             const progress = ((currentBar / totalBars) * 100).toFixed(1);
             progressText.textContent = `Progress: ${progress}% (${currentBar}/${totalBars})`;
+        }
+        
+        // Update sideways market chart
+        if (!isBatch && closes.length >= 20) {
+            updateSidewaysMarketChart();
         }
     } catch (error) {
         console.error("Error adding candle:", error);
@@ -530,8 +713,8 @@ function addInitialCandles(candleData) {
                 }
             ], {
                 margin: {t:30, b:10, l:60, r:20}, 
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                plot_bgcolor: '#ffffff', 
+                paper_bgcolor: '#000000',
+                plot_bgcolor: '#000000', 
                 font: {color: '#00d4ff', size: 12},
                 xaxis: {
                     gridcolor: 'rgba(255,255,255,0.05)', 
@@ -557,6 +740,11 @@ function addInitialCandles(candleData) {
         }
         
         log(`Added ${candleData.length} initial candles to charts`, "success");
+        
+        // Update sideways market chart after initial candles are loaded
+        if (closes.length >= 20) {
+            updateSidewaysMarketChart();
+        }
     } catch (error) {
         console.error("Error adding initial candles:", error);
         log(`Error adding initial candles: ${error.message}`, "error");
@@ -967,8 +1155,8 @@ function loadLearningCurve() {
                 }
             ], {
                 margin: {t:40, b:50, l:60, r:20},
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                plot_bgcolor: '#ffffff',
+                paper_bgcolor: '#000000',
+                plot_bgcolor: '#000000',
                 font: {color: '#00d4ff', size: 12},
                 xaxis: {
                     title: 'Timesteps',
