@@ -206,7 +206,7 @@ python start_web_simulator.py
 
 ---
 
-## 🧠 How It Works
+##  How It Works
 
 ### 1. Trading Environment
 
@@ -490,11 +490,11 @@ This enables:
 ### Execution Realism
 
 Unlike naive implementations, this system:
-- ✅ Executes at **next bar's open** (not current close)
-- ✅ Models bid-ask spread
-- ✅ Applies realistic commission and slippage
-- ✅ Checks stops at bar extremes (low/high)
-- ✅ Respects position size limits
+- Executes at **next bar's open** (not current close)
+- Models bid-ask spread
+- Applies realistic commission and slippage
+- Checks stops at bar extremes (low/high)
+- Respects position size limits
 
 ### Risk Management
 
@@ -527,7 +527,7 @@ This project is for educational purposes as part of an AIML Lab project.
 
 ---
 
-## 🙏 Acknowledgments
+##  Acknowledgments
 
 - **Stable-Baselines3** for RL implementations
 - **Gymnasium** for environment framework
@@ -541,8 +541,8 @@ This project is for educational purposes as part of an AIML Lab project.
 
 For questions or issues, contact the project team:
 - Trupti Patil (UEC2023163)
-- Sanika Tavate (UCE2023156)
-- Divyanshi Singh (UCE2023156)
+- Sanika Tavate (UCE2023566)
+- Divyanshi Singh (UCE2023565)
 - Ananya Shroff (UCE2023563)
 
 ---
